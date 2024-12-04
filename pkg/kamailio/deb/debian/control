@@ -6,7 +6,8 @@ Uploaders:
  Victor Seva <vseva@debian.org>,
 Build-Depends:
  bison,
- debhelper (>= 9),
+ cmake (>= 3.10),
+ debhelper-compat (= 13),
  default-libmysqlclient-dev,
  dh-systemd (>= 1.5),
  docbook-xml,
