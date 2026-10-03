@@ -27,6 +27,8 @@
 
 #include "../../core/mem/mem.h"
 #include "../../core/dset.h"
+#include "../../core/kemi.h"
+#include "../../core/route.h"
 
 #include "tmx_mod.h"
 #include "t_var.h"
@@ -726,11 +728,23 @@ int pv_parse_t_name(pv_spec_p sp, str *in)
 			else
 				goto error;
 			break;
+		case 7:
+			if(strncmp(in->s, "f_route", 7) == 0)
+				sp->pvp.pvn.u.isname.name.n = 11;
+			else if(strncmp(in->s, "b_route", 7) == 0)
+				sp->pvp.pvn.u.isname.name.n = 12;
+			else if(strncmp(in->s, "r_route", 7) == 0)
+				sp->pvp.pvn.u.isname.name.n = 13;
+			else
+				goto error;
+			break;
 		case 8:
 			if(strncmp(in->s, "id_label", 8) == 0)
 				sp->pvp.pvn.u.isname.name.n = 0;
 			else if(strncmp(in->s, "id_index", 8) == 0)
 				sp->pvp.pvn.u.isname.name.n = 1;
+			else if(strncmp(in->s, "bf_route", 8) == 0)
+				sp->pvp.pvn.u.isname.name.n = 14;
 			else
 				goto error;
 			break;
@@ -765,6 +779,52 @@ int pv_parse_t_name(pv_spec_p sp, str *in)
 error:
 	LM_ERR("unknown PV name %.*s\n", in->len, in->s);
 	return -1;
+}
+
+static int pv_get_t_route_name(struct sip_msg *msg, pv_param_t *param,
+		pv_value_t *res, int route_idx, struct route_list *rt,
+		int branch_failure)
+{
+	static const char branch_failure_prefix[] = "tm:branch-failure:";
+	struct str_hash_entry *entry;
+	str *kemi_route_name;
+	str route_name;
+	int i;
+	int kemi_route = 0;
+
+	if(route_idx <= 0)
+		return pv_get_null(msg, param, res);
+
+	if(sr_kemi_eng_get() != NULL) {
+		kemi_route_name = sr_kemi_cbname_lookup_idx(route_idx);
+		if(kemi_route_name == NULL || kemi_route_name->s == NULL)
+			return pv_get_null(msg, param, res);
+		route_name = *kemi_route_name;
+		kemi_route = 1;
+	} else {
+		for(i = 0; i < rt->names.size; i++) {
+			clist_foreach(&rt->names.table[i], entry, next)
+			{
+				if(entry->u.n == route_idx) {
+					route_name = entry->key;
+					goto found;
+				}
+			}
+		}
+		LM_ERR("route index %d not found\n", route_idx);
+		return pv_get_null(msg, param, res);
+	}
+
+found:
+	if(branch_failure && !kemi_route
+			&& route_name.len >= sizeof(branch_failure_prefix) - 1
+			&& strncmp(route_name.s, branch_failure_prefix,
+					   sizeof(branch_failure_prefix) - 1)
+					   == 0) {
+		route_name.s += sizeof(branch_failure_prefix) - 1;
+		route_name.len -= sizeof(branch_failure_prefix) - 1;
+	}
+	return pv_get_strval(msg, param, res, &route_name);
 }
 
 int pv_get_t(struct sip_msg *msg, pv_param_t *param, pv_value_t *res)
@@ -816,6 +876,18 @@ int pv_get_t(struct sip_msg *msg, pv_param_t *param, pv_value_t *res)
 			return pv_get_uintval(msg, param, res, t->label);
 		case 9:
 			return pv_get_uintval(msg, param, res, t->hash_index);
+		case 11:
+			return pv_get_t_route_name(
+					msg, param, res, t->on_failure, &failure_rt, 0);
+		case 12:
+			return pv_get_t_route_name(
+					msg, param, res, t->on_branch, &branch_rt, 0);
+		case 13:
+			return pv_get_t_route_name(
+					msg, param, res, t->on_reply, &onreply_rt, 0);
+		case 14:
+			return pv_get_t_route_name(msg, param, res, t->on_branch_failure,
+					&event_rt, 1);
 		default:
 			return pv_get_uintval(msg, param, res, t->label);
 	}
