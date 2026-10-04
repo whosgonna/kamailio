@@ -847,6 +847,20 @@ int pv_get_t(struct sip_msg *msg, pv_param_t *param, pv_value_t *res)
 	t = _tmx_tmb.t_gett();
 	if(t == NULL || t == T_UNDEFINED) {
 		/* no T */
+		switch(param->pvn.u.isname.name.n) {
+			case 11:
+				return pv_get_t_route_name(
+						msg, param, res, get_on_failure(), &failure_rt, 0);
+			case 12:
+				return pv_get_t_route_name(
+						msg, param, res, get_on_branch(), &branch_rt, 0);
+			case 13:
+				return pv_get_t_route_name(
+						msg, param, res, get_on_reply(), &onreply_rt, 0);
+			case 14:
+				return pv_get_t_route_name(msg, param, res,
+						get_on_branch_failure(), &event_rt, 1);
+		}
 		if(param->pvn.u.isname.name.n == 8 || param->pvn.u.isname.name.n == 9) {
 			/* id_label_n or id_index_n - attempt to create transaction */
 			if(_tmx_tmb.t_newtran(msg) < 0) {
